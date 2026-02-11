@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Укажите ссылку на RSS подкаста</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --surface: #1a1a1f;
+      --border: #2d2d35;
+      --text: #e8e8ed;
+      --text-muted: #888;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --success: #22c55e;
+      --error: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      max-width: 420px;
+      width: 100%;
+    }
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 0 0 1.5rem;
+      color: var(--text);
+    }
+    label {
+      display: block;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+    input[type="url"],
+    input[type="text"] {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      font-size: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      margin-bottom: 1.25rem;
+    }
+    input::placeholder { color: var(--text-muted); }
+    input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+    button {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      font-size: 1rem;
+      font-weight: 500;
+      color: #fff;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .message {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.9375rem;
+      display: none;
+    }
+    .message.success {
+      display: block;
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--success);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .message.error {
+      display: block;
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--error);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .message.warning {
+      display: block;
+      background: rgba(234, 179, 8, 0.15);
+      color: #eab308;
+      border: 1px solid rgba(234, 179, 8, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Укажите ссылку на RSS подкаста</h1>
+    <form id="form" autocomplete="off">
+      <label for="rss">Ссылка на RSS</label>
+      <input type="url" id="rss" name="rss" placeholder="https://example.com/feed.xml" required>
+      <button type="submit" id="btn">Подтвердить</button>
+    </form>
+    <div id="message" class="message" role="alert"></div>
+  </div>
+  <script>
+    (function () {
+      // Базовый URL API: либо из data-атрибута, либо относительный путь для того же хоста
+      var API_BASE = document.documentElement.getAttribute('data-api-url') || '';
+
+      function getUrlParams() {
+        var params = {};
+        var search = window.location.search || '';
+        if (!search) return params;
+        search.slice(1).split('&').forEach(function (pair) {
+          var i = pair.indexOf('=');
+          if (i === -1) return;
+          var key = decodeURIComponent(pair.slice(0, i).replace(/\+/g, ' '));
+          var value = decodeURIComponent(pair.slice(i + 1).replace(/\+/g, ' '));
+          params[key] = value;
+        });
+        return params;
+      }
+
+      function showMessage(text, type) {
+        var el = document.getElementById('message');
+        el.textContent = text;
+        el.className = 'message ' + (type || '');
+        el.style.display = 'block';
+      }
+
+      function hideMessage() {
+        document.getElementById('message').style.display = 'none';
+      }
+
+      var urlParams = getUrlParams();
+      var ticketId = urlParams.ticket_id;
+
+      document.getElementById('form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        hideMessage();
+        var rssInput = document.getElementById('rss');
+        var btn = document.getElementById('btn');
+        var rssUrl = (rssInput.value || '').trim();
+        if (!rssUrl) {
+          showMessage('Введите ссылку на RSS.', 'error');
+          return;
+        }
+        if (!ticketId) {
+          showMessage('В ссылке отсутствует идентификатор запроса. Перейдите по ссылке из письма.', 'warning');
+          return;
+        }
+
+        btn.disabled = true;
+        var endpoint = (API_BASE.replace(/\/$/, '') + '/api/update-ticket').replace(/^\/+/, '/');
+        if (API_BASE.indexOf('http') === 0) {
+          endpoint = API_BASE.replace(/\/$/, '') + '/api/update-ticket';
+        }
+
+        fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ticket_id: ticketId,
+            rss_url: rssUrl,
+            field_id: urlParams.field_id || undefined
+          })
+        })
+          .then(function (res) {
+            if (res.ok) {
+              showMessage('RSS отправлен в Звук', 'success');
+              rssInput.value = '';
+            } else {
+              return res.json().then(function (data) {
+                throw new Error(data.error || 'Ошибка отправки');
+              }).catch(function (err) {
+                if (err.message !== 'Ошибка отправки') throw err;
+                throw new Error(res.statusText || 'Ошибка отправки');
+              });
+            }
+          })
+          .catch(function (err) {
+            showMessage(err.message || 'Не удалось отправить. Проверьте ссылку и попробуйте позже.', 'error');
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+      });
+
+      if (!ticketId) {
+        showMessage('Перейдите по ссылке из письма от Звука.', 'warning');
+      }
+    })();
+  </script>
+</body>
+</html>
