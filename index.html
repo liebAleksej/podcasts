@@ -123,6 +123,7 @@
     (function () {
       // Базовый URL API: либо из data-атрибута, либо относительный путь для того же хоста
       var API_BASE = document.documentElement.getAttribute('data-api-url') || '';
+      var formLocked = false;
 
       function getUrlParams() {
         var params = {};
@@ -149,14 +150,64 @@
         document.getElementById('message').style.display = 'none';
       }
 
+      function resolveEndpoint(path) {
+        if (API_BASE.indexOf('http') === 0) {
+          return API_BASE.replace(/\/$/, '') + path;
+        }
+        return (API_BASE.replace(/\/$/, '') + path).replace(/^\/+/, '/');
+      }
+
       var urlParams = getUrlParams();
       var ticketId = urlParams.ticket_id;
+      var rssInput = document.getElementById('rss');
+      var btn = document.getElementById('btn');
+      var form = document.getElementById('form');
 
-      document.getElementById('form').addEventListener('submit', function (e) {
+      function lockFormWithMessage(text) {
+        formLocked = true;
+        rssInput.disabled = true;
+        btn.disabled = true;
+        showMessage(text, 'warning');
+      }
+
+      function checkTicketBeforeSubmit() {
+        if (!ticketId) return;
+        btn.disabled = true;
+        var endpoint = resolveEndpoint('/api/check-ticket');
+
+        fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ticket_id: ticketId,
+            check_field_id: urlParams.check_field_id || 25995
+          })
+        })
+          .then(function (res) {
+            if (!res.ok) throw new Error('Не удалось проверить статус тикета');
+            return res.json();
+          })
+          .then(function (data) {
+            if (data && data.already_sent) {
+              lockFormWithMessage('Вы уже отправили подкаст. Если вы хотите добавить больше подкастов, ответьте на письмо от поддержки Звука фразой "Позвать оператора"');
+            }
+          })
+          .catch(function () {
+            showMessage('Не удалось проверить, отправляли ли вы подкаст ранее. Вы можете попробовать отправить RSS.', 'warning');
+          })
+          .finally(function () {
+            if (!formLocked) {
+              btn.disabled = false;
+            }
+          });
+      }
+
+      form.addEventListener('submit', function (e) {
         e.preventDefault();
         hideMessage();
-        var rssInput = document.getElementById('rss');
-        var btn = document.getElementById('btn');
+        if (formLocked) {
+          return;
+        }
         var rssUrl = (rssInput.value || '').trim();
         if (!rssUrl) {
           showMessage('Введите ссылку на RSS.', 'error');
@@ -168,10 +219,7 @@
         }
 
         btn.disabled = true;
-        var endpoint = (API_BASE.replace(/\/$/, '') + '/api/update-ticket').replace(/^\/+/, '/');
-        if (API_BASE.indexOf('http') === 0) {
-          endpoint = API_BASE.replace(/\/$/, '') + '/api/update-ticket';
-        }
+        var endpoint = resolveEndpoint('/api/update-ticket');
 
         fetch(endpoint, {
           method: 'POST',
@@ -186,6 +234,7 @@
             if (res.ok) {
               showMessage('RSS отправлен в Звук', 'success');
               rssInput.value = '';
+              lockFormWithMessage('Вы уже отправили подкаст. Если вы хотите добавить больше подкастов, ответьте на письмо от поддержки Звука фразой "Позвать оператора"');
             } else {
               return res.json().then(function (data) {
                 throw new Error(data.error || 'Ошибка отправки');
@@ -205,6 +254,8 @@
 
       if (!ticketId) {
         showMessage('Перейдите по ссылке из письма от Звука.', 'warning');
+      } else {
+        checkTicketBeforeSubmit();
       }
     })();
   </script>
